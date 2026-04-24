@@ -2,7 +2,6 @@ mod renderer;
 
 use renderer::Renderer;
 
-use std::rc::Rc;
 use std::sync::Arc;
 
 use winit::{
@@ -13,11 +12,15 @@ use winit::{
     window::Window,
 };
 
+pub struct GpuContext {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+}
+
 // This will store the state of our game
 pub struct State {
     surface: wgpu::Surface<'static>,
-    device: Rc<wgpu::Device>,
-    queue: Rc<wgpu::Queue>,
+    gpu_context: Arc<GpuContext>,
     config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
     window: Arc<Window>,
@@ -78,8 +81,7 @@ impl State {
             })
             .await?;
 
-        let device = Rc::new(device);
-        let queue = Rc::new(queue);
+        let gpu_context = Arc::new(GpuContext { device, queue });
 
         let surface_caps = surface.get_capabilities(&adapter);
         // Shader code in this tutorial assumes an sRGB surface texture. Using a different
@@ -102,12 +104,11 @@ impl State {
             desired_maximum_frame_latency: 2,
         };
 
-        let renderer = Renderer::new(&device, &queue, config.format);
+        let renderer = Renderer::new(&gpu_context);
 
         Ok(Self {
             surface,
-            device,
-            queue,
+            gpu_context,
             config,
             is_surface_configured: false,
             window,
@@ -119,7 +120,8 @@ impl State {
         if width > 0 && height > 0 {
             self.config.width = width;
             self.config.height = height;
-            self.surface.configure(&self.device, &self.config);
+            self.surface
+                .configure(&self.gpu_context.device, &self.config);
             self.is_surface_configured = true;
         }
     }
@@ -135,7 +137,8 @@ impl State {
         let output = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
             wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
-                self.surface.configure(&self.device, &self.config);
+                self.surface
+                    .configure(&self.gpu_context.device, &self.config);
                 surface_texture
             }
             wgpu::CurrentSurfaceTexture::Timeout
@@ -145,7 +148,8 @@ impl State {
                 return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Outdated => {
-                self.surface.configure(&self.device, &self.config);
+                self.surface
+                    .configure(&self.gpu_context.device, &self.config);
                 return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Lost => {
@@ -155,7 +159,8 @@ impl State {
             }
         };
 
-        self.renderer.render(&output.texture);
+        self.renderer.begin_frame();
+        self.renderer.end_frame(&output.texture);
 
         output.present();
 
