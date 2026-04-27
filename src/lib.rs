@@ -1,6 +1,6 @@
 mod renderer;
 
-use renderer::Renderer;
+use renderer::{Renderer, Vertex, VertexLayout};
 
 use std::sync::Arc;
 
@@ -160,6 +160,8 @@ impl State {
         };
 
         self.renderer.begin_frame();
+        self.renderer
+            .triangle(VERTICES[0], VERTICES[1], VERTICES[2]);
         self.renderer.end_frame(&output.texture);
 
         output.present();
@@ -253,3 +255,47 @@ pub fn run() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct VertexPosCol {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+impl Vertex for VertexPosCol {
+    fn layout() -> VertexLayout {
+        VertexLayout::new(
+            std::mem::size_of::<VertexPosCol>() as wgpu::BufferAddress,
+            wgpu::VertexStepMode::Vertex,
+            vec![
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+            ],
+        )
+    }
+}
+
+// lib.rs
+const VERTICES: &[VertexPosCol] = &[
+    VertexPosCol {
+        position: [0.0, 0.5, 0.0],
+        color: [1.0, 0.0, 0.0],
+    },
+    VertexPosCol {
+        position: [-0.5, -0.5, 0.0],
+        color: [0.0, 1.0, 0.0],
+    },
+    VertexPosCol {
+        position: [0.5, -0.5, 0.0],
+        color: [0.0, 0.0, 1.0],
+    },
+];

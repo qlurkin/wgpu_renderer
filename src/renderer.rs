@@ -2,24 +2,74 @@ use std::sync::Arc;
 
 use crate::GpuContext;
 
+pub trait Vertex: Copy + Clone + std::fmt::Debug + bytemuck::Pod + bytemuck::Zeroable {
+    fn layout() -> VertexLayout;
+}
+
+#[derive(Hash, Eq, PartialEq, Clone, Debug)]
+pub struct VertexLayout {
+    pub array_stride: wgpu::BufferAddress,
+    pub step_mode: wgpu::VertexStepMode,
+    pub attributes: Vec<wgpu::VertexAttribute>,
+}
+
+impl VertexLayout {
+    pub fn new(
+        array_stride: wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode,
+        attributes: Vec<wgpu::VertexAttribute>,
+    ) -> Self {
+        Self {
+            array_stride,
+            step_mode,
+            attributes,
+        }
+    }
+
+    pub fn as_wgpu(&self) -> wgpu::VertexBufferLayout<'_> {
+        wgpu::VertexBufferLayout {
+            array_stride: self.array_stride,
+            step_mode: self.step_mode,
+            attributes: &self.attributes,
+        }
+    }
+}
+
 pub struct Renderer {
     gpu_context: Arc<GpuContext>,
     render_pipeline: Option<wgpu::RenderPipeline>,
+    vertex_buffer: wgpu::Buffer,
+    vertex_layout: Option<VertexLayout>,
 }
 
 impl Renderer {
     pub fn new(gpu_context: &Arc<GpuContext>) -> Self {
+        let vertex_buffer = gpu_context.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Renderer Vertex Buffer"),
+            size: 3 * 2 * 3 * 4,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         Self {
             gpu_context: Arc::clone(gpu_context),
             render_pipeline: None,
+            vertex_buffer,
+            vertex_layout: None,
         }
     }
 
-    fn create_pipeline(&mut self, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
+    fn create_pipeline(
+        &mut self,
+        format: wgpu::TextureFormat,
+        vertex_layout: VertexLayout,
+        material_shader: &str,
+    ) -> wgpu::RenderPipeline {
         let shader = self
             .gpu_context
             .device
             .create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+        // TODO: Adapt the shader to accpet a vertex buffer
 
         let render_pipeline_layout =
             self.gpu_context
@@ -38,7 +88,7 @@ impl Renderer {
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("vs_main"),
-                    buffers: &[],
+                    buffers: &[vertex_layout.as_wgpu()],
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
                 },
                 fragment: Some(wgpu::FragmentState {
@@ -74,11 +124,26 @@ impl Renderer {
             })
     }
 
-    pub fn begin_frame(&self) {}
+    pub fn begin_frame(&mut self) {}
+
+    pub fn triangle<V: Vertex>(&mut self, v1: V, v2: V, v3: V) {
+        let vertex_layout = V::layout();
+        self.vertex_layout = Some(vertex_layout);
+        // TODO: Fill the vertex buffer
+        let vertices = &[v1, v2, v3];
+
+        self.gpu_context.queue.write_buffer(
+            &self.vertex_buffer,
+            0, // offset en bytes
+            bytemuck::cast_slice(vertices),
+        );
+    }
 
     pub fn end_frame(&mut self, texture: &wgpu::Texture) {
+        let vertex_layout = self.vertex_layout.take().unwrap();
+
         if self.render_pipeline.is_none() {
-            self.render_pipeline = Some(self.create_pipeline(texture.format()));
+            self.render_pipeline = Some(self.create_pipeline(texture.format(), vertex_layout, ""));
         }
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -114,6 +179,7 @@ impl Renderer {
             });
 
             render_pass.set_pipeline(self.render_pipeline.as_ref().unwrap());
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..3, 0..1);
         }
 
