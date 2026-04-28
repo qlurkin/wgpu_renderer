@@ -161,7 +161,7 @@ impl State {
 
         self.renderer.begin_frame();
         self.renderer
-            .triangle(VERTICES[0], VERTICES[1], VERTICES[2]);
+            .triangle(VERTICES[0], VERTICES[1], VERTICES[2], "");
         self.renderer.end_frame(&output.texture);
 
         output.present();
