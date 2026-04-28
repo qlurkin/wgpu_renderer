@@ -51,7 +51,6 @@ pub struct Renderer {
     gpu_context: Arc<GpuContext>,
     render_pipeline: HashMap<PipelineKey, wgpu::RenderPipeline>,
     vertex_buffer: wgpu::Buffer,
-    vertex_layout: Option<VertexLayout>,
     vertices: Option<HashMap<SurfaceKey, Vec<u8>>>,
 }
 
@@ -68,7 +67,6 @@ impl Renderer {
             gpu_context: Arc::clone(gpu_context),
             render_pipeline: HashMap::new(),
             vertex_buffer,
-            vertex_layout: None,
             vertices: None,
         }
     }
@@ -148,10 +146,6 @@ impl Renderer {
             vertex_layout,
             shader: String::from(shader),
         };
-        // self.vertex_layout = Some(vertex_layout);
-        // TODO: Fill the vertex buffer
-
-        // let vertices = &[v1, v2, v3];
 
         let vertices = self
             .vertices
@@ -161,22 +155,10 @@ impl Renderer {
             .or_insert(Vec::new());
 
         vertices.extend_from_slice(bytemuck::bytes_of(&[v1, v2, v3]));
-
-        // self.gpu_context.queue.write_buffer(
-        //     &self.vertex_buffer,
-        //     0, // offset en bytes
-        //     bytemuck::cast_slice(vertices),
-        // );
     }
 
     pub fn end_frame(&mut self, texture: &wgpu::Texture) {
-        // let vertex_layout = self.vertex_layout.take().unwrap();
-
         let format = texture.format();
-
-        // if self.render_pipeline.is_none() {
-        //     self.render_pipeline = Some(self.create_pipeline(texture.format(), vertex_layout, ""));
-        // }
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
