@@ -54,7 +54,7 @@ pub struct Renderer {
     vertices: Option<HashMap<SurfaceKey, Vec<u8>>>,
 }
 
-pub fn generate_wgsl_from_vertex_layout(layout: &VertexLayout) -> String {
+pub fn generate_shader_src(layout: &VertexLayout) -> String {
     let mut out = String::new();
 
     out.push_str("struct VertexInput {\n");
@@ -161,7 +161,7 @@ impl Renderer {
         vertex_layout: VertexLayout,
         material_shader: &str,
     ) -> wgpu::RenderPipeline {
-        let shader_src = generate_wgsl_from_vertex_layout(&vertex_layout);
+        let shader_src = generate_shader_src(&vertex_layout);
 
         let shader = self
             .gpu_context
@@ -170,7 +170,6 @@ impl Renderer {
                 label: Some("Shader"),
                 source: wgpu::ShaderSource::Wgsl(shader_src.into()),
             });
-        // TODO: Adapt the shader to accpet a vertex buffer
 
         let render_pipeline_layout =
             self.gpu_context
