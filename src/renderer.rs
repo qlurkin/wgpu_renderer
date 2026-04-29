@@ -54,6 +54,90 @@ pub struct Renderer {
     vertices: Option<HashMap<SurfaceKey, Vec<u8>>>,
 }
 
+pub fn generate_wgsl_from_vertex_layout(layout: &VertexLayout) -> String {
+    let mut out = String::new();
+
+    out.push_str("struct VertexInput {\n");
+
+    for attr in &layout.attributes {
+        let ty = wgsl_type_from_vertex_format(attr.format);
+
+        out.push_str(&format!(
+            "    @location({}) attr{}: {},\n",
+            attr.shader_location, attr.shader_location, ty
+        ));
+    }
+
+    out.push_str("};\n\n");
+
+    out.push_str("struct VertexOutput {\n");
+    out.push_str("    @builtin(position) position: vec4<f32>,\n");
+    out.push_str("};\n\n");
+
+    out.push_str("@vertex\n");
+    out.push_str("fn vs_main(input: VertexInput) -> VertexOutput {\n");
+    out.push_str("    var out: VertexOutput;\n");
+
+    // Suppose que location 0 = position
+    if layout.attributes.iter().any(|a| a.shader_location == 0) {
+        out.push_str("    out.position = vec4<f32>(input.attr0, 1.0);\n");
+    } else {
+        out.push_str("    out.position = vec4<f32>(0.0, 0.0, 0.0, 1.0);\n");
+    }
+
+    out.push_str("    return out;\n");
+    out.push_str("}\n\n");
+
+    out.push_str("@fragment\n");
+    out.push_str("fn fs_main() -> @location(0) vec4<f32> {\n");
+    out.push_str("    return vec4<f32>(1.0, 1.0, 1.0, 1.0);\n");
+    out.push_str("}\n");
+
+    out
+}
+
+fn wgsl_type_from_vertex_format(format: wgpu::VertexFormat) -> &'static str {
+    match format {
+        wgpu::VertexFormat::Uint8x2 => "vec2<u32>",
+        wgpu::VertexFormat::Uint8x4 => "vec4<u32>",
+        wgpu::VertexFormat::Sint8x2 => "vec2<i32>",
+        wgpu::VertexFormat::Sint8x4 => "vec4<i32>",
+        wgpu::VertexFormat::Unorm8x2 => "vec2<f32>",
+        wgpu::VertexFormat::Unorm8x4 => "vec4<f32>",
+        wgpu::VertexFormat::Snorm8x2 => "vec2<f32>",
+        wgpu::VertexFormat::Snorm8x4 => "vec4<f32>",
+
+        wgpu::VertexFormat::Uint16x2 => "vec2<u32>",
+        wgpu::VertexFormat::Uint16x4 => "vec4<u32>",
+        wgpu::VertexFormat::Sint16x2 => "vec2<i32>",
+        wgpu::VertexFormat::Sint16x4 => "vec4<i32>",
+        wgpu::VertexFormat::Unorm16x2 => "vec2<f32>",
+        wgpu::VertexFormat::Unorm16x4 => "vec4<f32>",
+        wgpu::VertexFormat::Snorm16x2 => "vec2<f32>",
+        wgpu::VertexFormat::Snorm16x4 => "vec4<f32>",
+
+        wgpu::VertexFormat::Float16x2 => "vec2<f32>",
+        wgpu::VertexFormat::Float16x4 => "vec4<f32>",
+
+        wgpu::VertexFormat::Float32 => "f32",
+        wgpu::VertexFormat::Float32x2 => "vec2<f32>",
+        wgpu::VertexFormat::Float32x3 => "vec3<f32>",
+        wgpu::VertexFormat::Float32x4 => "vec4<f32>",
+
+        wgpu::VertexFormat::Uint32 => "u32",
+        wgpu::VertexFormat::Uint32x2 => "vec2<u32>",
+        wgpu::VertexFormat::Uint32x3 => "vec3<u32>",
+        wgpu::VertexFormat::Uint32x4 => "vec4<u32>",
+
+        wgpu::VertexFormat::Sint32 => "i32",
+        wgpu::VertexFormat::Sint32x2 => "vec2<i32>",
+        wgpu::VertexFormat::Sint32x3 => "vec3<i32>",
+        wgpu::VertexFormat::Sint32x4 => "vec4<i32>",
+
+        _ => "vec4<f32>",
+    }
+}
+
 impl Renderer {
     pub fn new(gpu_context: &Arc<GpuContext>) -> Self {
         let vertex_buffer = gpu_context.device.create_buffer(&wgpu::BufferDescriptor {
@@ -77,10 +161,15 @@ impl Renderer {
         vertex_layout: VertexLayout,
         material_shader: &str,
     ) -> wgpu::RenderPipeline {
+        let shader_src = generate_wgsl_from_vertex_layout(&vertex_layout);
+
         let shader = self
             .gpu_context
             .device
-            .create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("Shader"),
+                source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+            });
         // TODO: Adapt the shader to accpet a vertex buffer
 
         let render_pipeline_layout =
