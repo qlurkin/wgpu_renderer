@@ -71,7 +71,8 @@ pub fn generate_shader_src(layout: &VertexLayout) -> String {
     out.push_str("};\n\n");
 
     out.push_str("struct VertexOutput {\n");
-    out.push_str("    @builtin(position) position: vec4<f32>,\n");
+    out.push_str("    @builtin(position) clip_pos: vec4<f32>,\n");
+    out.push_str("    @location(0) attr0: vec3<f32>,\n");
     out.push_str("};\n\n");
 
     out.push_str("@vertex\n");
@@ -80,17 +81,23 @@ pub fn generate_shader_src(layout: &VertexLayout) -> String {
 
     // Suppose que location 0 = position
     if layout.attributes.iter().any(|a| a.shader_location == 0) {
-        out.push_str("    out.position = vec4<f32>(input.attr0, 1.0);\n");
+        out.push_str("    out.clip_pos = vec4<f32>(input.attr0, 1.0);\n");
+        out.push_str("    out.attr0 = input.attr0;\n");
     } else {
-        out.push_str("    out.position = vec4<f32>(0.0, 0.0, 0.0, 1.0);\n");
+        out.push_str("    out.clip_pos = vec4<f32>(0.0, 0.0, 0.0, 1.0);\n");
+        out.push_str("    out.attr0 = vec3<f32>(0.0);\n");
     }
 
     out.push_str("    return out;\n");
     out.push_str("}\n\n");
 
+    out.push_str("fn frag(position: vec3<f32>) -> vec4<f32> {\n");
+    out.push_str("    return vec4<f32>(position.x, position.y, 1.0, 1.0);\n");
+    out.push_str("}\n");
+
     out.push_str("@fragment\n");
-    out.push_str("fn fs_main() -> @location(0) vec4<f32> {\n");
-    out.push_str("    return vec4<f32>(1.0, 1.0, 1.0, 1.0);\n");
+    out.push_str("fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {\n");
+    out.push_str("    return frag(input.attr0);\n");
     out.push_str("}\n");
 
     out
