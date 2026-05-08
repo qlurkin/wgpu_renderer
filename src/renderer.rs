@@ -54,7 +54,7 @@ pub struct Renderer {
     vertices: Option<HashMap<SurfaceKey, Vec<u8>>>,
 }
 
-pub fn generate_shader_src(layout: &VertexLayout) -> String {
+pub fn generate_shader_src(layout: &VertexLayout, shader: &str) -> String {
     let mut out = String::new();
 
     out.push_str("struct VertexInput {\n");
@@ -72,7 +72,14 @@ pub fn generate_shader_src(layout: &VertexLayout) -> String {
 
     out.push_str("struct VertexOutput {\n");
     out.push_str("    @builtin(position) clip_pos: vec4<f32>,\n");
-    out.push_str("    @location(0) attr0: vec3<f32>,\n");
+    for attr in &layout.attributes {
+        let ty = wgsl_type_from_vertex_format(attr.format);
+
+        out.push_str(&format!(
+            "    @location({}) attr{}: {},\n",
+            attr.shader_location, attr.shader_location, ty
+        ));
+    }
     out.push_str("};\n\n");
 
     out.push_str("@vertex\n");
@@ -80,24 +87,27 @@ pub fn generate_shader_src(layout: &VertexLayout) -> String {
     out.push_str("    var out: VertexOutput;\n");
 
     // Suppose que location 0 = position
-    if layout.attributes.iter().any(|a| a.shader_location == 0) {
-        out.push_str("    out.clip_pos = vec4<f32>(input.attr0, 1.0);\n");
-        out.push_str("    out.attr0 = input.attr0;\n");
-    } else {
-        out.push_str("    out.clip_pos = vec4<f32>(0.0, 0.0, 0.0, 1.0);\n");
-        out.push_str("    out.attr0 = vec3<f32>(0.0);\n");
+    out.push_str("    out.clip_pos = vec4<f32>(input.attr0, 1.0);\n");
+
+    for attr in &layout.attributes {
+        out.push_str(&format!(
+            "    out.attr{} = input.attr{};\n",
+            attr.shader_location, attr.shader_location
+        ));
     }
 
     out.push_str("    return out;\n");
     out.push_str("}\n\n");
 
-    out.push_str("fn frag(position: vec3<f32>) -> vec4<f32> {\n");
-    out.push_str("    return vec4<f32>(position.x, position.y, 1.0, 1.0);\n");
-    out.push_str("}\n");
+    out.push_str(shader);
 
     out.push_str("@fragment\n");
     out.push_str("fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {\n");
-    out.push_str("    return frag(input.attr0);\n");
+    out.push_str("    return fragment(\n");
+    for attr in &layout.attributes {
+        out.push_str(&format!("         input.attr{},\n", attr.shader_location));
+    }
+    out.push_str("    );\n");
     out.push_str("}\n");
 
     out
@@ -168,7 +178,7 @@ impl Renderer {
         vertex_layout: VertexLayout,
         material_shader: &str,
     ) -> wgpu::RenderPipeline {
-        let shader_src = generate_shader_src(&vertex_layout);
+        let shader_src = generate_shader_src(&vertex_layout, material_shader);
 
         let shader = self
             .gpu_context
